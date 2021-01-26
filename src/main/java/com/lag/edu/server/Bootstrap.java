@@ -53,11 +53,12 @@ public class Bootstrap {
      * MiniCat2.0版本
      *
      * 完成MiniCat2.0版本
+     * http://localhost:8080/index.html
      * 需求：封装Request和Response对象，返回html静态资源文件
      *
      * @throws IOException 异常处理
      */
-    public void start2() throws IOException {
+    public void start2_1() throws IOException {
         ServerSocket serverSocket = new ServerSocket(port);
         System.out.println("MiniCat start on Port:" + port);
         while (true) {
@@ -74,6 +75,20 @@ public class Bootstrap {
             socket.close();
         }
     }
+    public void start2_2() throws IOException {
+        ServerSocket serverSocket = new ServerSocket(port);
+        System.out.println("MiniCat start on Port:" + port);
+        while (true) {
+            Socket socket = serverSocket.accept();
+            InputStream inputStream = socket.getInputStream();
+            // 封装Request对象和Response对象
+            Request request = new Request(inputStream);
+            Response response = new Response(socket.getOutputStream());
+
+            response.outputHtml(request.getUrl());
+            socket.close();
+        }
+    }
 
     /**
      * MiniCat程序启动入口
@@ -82,7 +97,7 @@ public class Bootstrap {
         Bootstrap bootstrap = new Bootstrap();
         try {
             // 启动MiniCat
-            bootstrap.start2();
+            bootstrap.start2_2();
         } catch (IOException e) {
             e.printStackTrace();
         }
