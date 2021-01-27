@@ -38,7 +38,7 @@ public class Bootstrap {
 
     /**
      * MiniCat启动需要初始化的操作
-     *
+     * <p>
      * 完成MiniCat 1.0版本
      * 需求：浏览器请求http://localhost:8080,返回一个固定的字符串到页面"Hello Minicat!"
      */
@@ -59,7 +59,7 @@ public class Bootstrap {
     /**
      * MiniCat启动需要初始化的操作
      * MiniCat2.0版本
-     *
+     * <p>
      * 完成MiniCat2.0版本
      * http://localhost:8080/index.html
      * 需求：封装Request和Response对象，返回html静态资源文件
@@ -83,6 +83,7 @@ public class Bootstrap {
             socket.close();
         }
     }
+
     public void start2_2() throws IOException {
         ServerSocket serverSocket = new ServerSocket(port);
         System.out.println("MiniCat start on Port:" + port);
@@ -100,7 +101,6 @@ public class Bootstrap {
 
     /**
      * MiniCat3.0版本：可以请求动态资源(servlet)
-     *
      */
     public void start3() throws Exception {
         // 加载解析web.xml,初始化servlet
@@ -120,13 +120,29 @@ public class Bootstrap {
             } else {
                 // 动态资源servlet请求
                 HttpServlet httpServlet = servletMap.get(request.getUrl());
-                httpServlet.service(request,response);
+                httpServlet.service(request, response);
             }
             socket.close();
         }
     }
 
-    private Map<String,HttpServlet> servletMap = new HashMap<String,HttpServlet>();
+    /**
+     * MiniCat3.0版本升级版：多线程升级
+     */
+    public void start3_advs() throws Exception {
+        // 加载解析web.xml,初始化servlet
+        loadServlet();
+
+        ServerSocket serverSocket = new ServerSocket(port);
+        System.out.println("MiniCat start on Port:" + port);
+        while (true) {
+            Socket socket = serverSocket.accept();
+            RequestProcessor requestProcessor = new RequestProcessor(socket, servletMap);
+            requestProcessor.start();
+        }
+    }
+
+    private Map<String, HttpServlet> servletMap = new HashMap<String, HttpServlet>();
 
     private void loadServlet() {
         InputStream resourceAsStream = this.getClass().getClassLoader().getResourceAsStream("web.xml");
@@ -136,7 +152,7 @@ public class Bootstrap {
             Element rootElement = document.getRootElement();
             List<Element> selectNodes = rootElement.selectNodes("//servlet");
             for (int i = 0; i < selectNodes.size(); i++) {
-                Element element =  selectNodes.get(i);
+                Element element = selectNodes.get(i);
                 // <servlet-name>lag</servlet-name>
                 Element servletnameElement = (Element) element.selectSingleNode("servlet-name");
                 String servletName = servletnameElement.getStringValue();
@@ -162,7 +178,7 @@ public class Bootstrap {
         Bootstrap bootstrap = new Bootstrap();
         try {
             // 启动MiniCat
-            bootstrap.start3();
+            bootstrap.start3_advs();
         } catch (Exception e) {
             e.printStackTrace();
         }
