@@ -13,6 +13,7 @@ import java.net.Socket;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.*;
 
 /**
  * Step1
@@ -142,6 +143,33 @@ public class Bootstrap {
         }
     }
 
+    /**
+     * MiniCat3.0版本升级版：使用线程池
+     */
+    public void start3_pool() throws Exception {
+        // 定义一个线程池
+        int corePoolSize = 10;
+        int maximumPoolSize = 50;
+        long keepAliveTime = 100L;
+        TimeUnit unit = TimeUnit.SECONDS;
+        BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(50);
+        ThreadFactory threadFactory = Executors.defaultThreadFactory();
+        RejectedExecutionHandler handler = new ThreadPoolExecutor.AbortPolicy();
+
+        ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory, handler);
+
+        // 加载解析web.xml,初始化servlet
+        loadServlet();
+
+        ServerSocket serverSocket = new ServerSocket(port);
+        System.out.println("MiniCat start on Port:" + port);
+        while (true) {
+            Socket socket = serverSocket.accept();
+            RequestProcessor requestProcessor = new RequestProcessor(socket, servletMap);
+            threadPoolExecutor.execute(requestProcessor);
+        }
+    }
+
     private Map<String, HttpServlet> servletMap = new HashMap<String, HttpServlet>();
 
     private void loadServlet() {
@@ -178,7 +206,7 @@ public class Bootstrap {
         Bootstrap bootstrap = new Bootstrap();
         try {
             // 启动MiniCat
-            bootstrap.start3_advs();
+            bootstrap.start3_pool();
         } catch (Exception e) {
             e.printStackTrace();
         }
