@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<web-app>
+    <servlet>
+        <servlet-name>lag</servlet-name>
+        <servlet-class>com.lag.edu.server.LagServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>lag</servlet-name>
+        <url-pattern>/lag</url-pattern>
+    </servlet-mapping>
+</web-app>
