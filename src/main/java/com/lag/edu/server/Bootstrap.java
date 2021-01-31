@@ -1,15 +1,15 @@
 package com.lag.edu.server;
 
+import com.alibaba.fastjson.JSON;
 import org.dom4j.Document;
 import org.dom4j.DocumentException;
 import org.dom4j.Element;
 import org.dom4j.io.SAXReader;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -199,7 +199,154 @@ public class Bootstrap {
         }
     }
 
+    /**
+     * MiniCat4.0版本：模拟webapps部署效果
+     */
+    public void start4() throws Exception {
+        // 定义一个线程池
+        int corePoolSize = 10;
+        int maximumPoolSize = 50;
+        long keepAliveTime = 100L;
+        TimeUnit unit = TimeUnit.SECONDS;
+        BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(50);
+        ThreadFactory threadFactory = Executors.defaultThreadFactory();
+        RejectedExecutionHandler handler = new ThreadPoolExecutor.AbortPolicy();
 
+        ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory, handler);
+
+        // 加载解析web.xml,初始化servlet
+        loadServlet4();
+
+        ServerSocket serverSocket = new ServerSocket(port);
+        System.out.println("MiniCat start on Port:" + port);
+        while (true) {
+            Socket socket = serverSocket.accept();
+            RequestProcessor requestProcessor = new RequestProcessor(socket, myMapperInfo);
+            threadPoolExecutor.execute(requestProcessor);
+        }
+    }
+
+    private MyMapper myMapperInfo = new MyMapper();
+
+    private String getProjectPath() {
+        InputStream resourceAsStream = this.getClass().getClassLoader().getResourceAsStream("server.xml");
+        SAXReader saxReader = new SAXReader();
+        String path = "";
+        try {
+            Document document = saxReader.read(resourceAsStream);
+            Element rootElement = document.getRootElement();
+            System.out.println("=========" + JSON.toJSONString(rootElement));
+            List<Element> selectNodes = rootElement.selectNodes("//Engine");
+            Element ele = (Element) selectNodes.get(0).selectSingleNode("Host");
+            path = ele.attributeValue("appBase");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return path;
+    }
+
+    /**
+     * 加载解析web.xml，初始化Servlet
+     */
+    private void loadServlet4() throws Exception{
+        //获取存放项目的路径
+        String projectPath = getProjectPath();
+        MyMapper myMapper = new MyMapper();
+        try {
+            myMapperInfo = createMapperByXml(projectPath,myMapper);
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private MyMapper createMapperByXml(String projectPath,MyMapper myMapper) throws Exception{
+        MyHost myHost = new MyHost();
+        List<MyHost> myHostList = new ArrayList<>();
+        myHostList.add(getXmlPath(projectPath,myHost,0));
+        myMapper.setMyHostList(myHostList);
+        return myMapper;
+    }
+
+    //获取xml的路径
+    private MyHost getXmlPath(String path, MyHost myHost, int count) throws Exception {
+        File dir = new File(path).getAbsoluteFile();
+        if (!dir.exists()) {
+            System.out.println("文件不存在");
+        } else {
+            count++;
+            File[] files = dir.listFiles();
+            for (File file : files) {
+                if (file.isFile() && file.toString().endsWith("xml")) {//如果是文件，并且包含输入输入的文件后缀，就打印出文件路径以及文件名
+                    System.out.println("文件名:" + file.getName() + "\t\t绝对路径:"
+                            + file.toString());
+                    for (MyContext myContext : myHost.getMyContextList()) {
+                        if (myContext.getAppName()
+                                .equals(file.getParentFile().getParentFile().getName())) {
+                            MyWrapper myWrapper = parseXmlLoadServlet(file.toString(), file.getParentFile());
+                            myContext.getMyWrapperList().add(myWrapper);
+                        }
+                    }
+                }
+                if (file.isDirectory()) {//如果是文件夹就递归
+                    if (count == 1) {
+                        MyContext myContext = new MyContext();
+                        myContext.setAppName(file.getName());
+                        myHost.getMyContextList().add(myContext);
+                    }
+                    getXmlPath(file.toString(), myHost, count);
+                }
+            }
+        }
+        return myHost;
+    }
+
+    private MyWrapper parseXmlLoadServlet(String xmlPath,File file) throws Exception{
+        MyWrapper myWrapper = new MyWrapper();
+        //使用dom4j解析
+        InputStream resourceAsStream = new FileInputStream(xmlPath);
+        SAXReader saxReader = new SAXReader();
+        Document document = saxReader.read(resourceAsStream);
+        Element rootElement = document.getRootElement();
+        String servletClass = "";
+        List<Element> selectNodes = rootElement.selectNodes("//servlet");
+        for (int i = 0; i < selectNodes.size(); i++) {
+            Element element =  selectNodes.get(i);
+            // <servlet-name>lagou</servlet-name>
+            Element servletnameElement = (Element) element.selectSingleNode("servlet-name");
+            String servletName = servletnameElement.getStringValue();
+            // <servlet-class>server.LagouServlet</servlet-class>
+            Element servletclassElement = (Element) element.selectSingleNode("servlet-class");
+            servletClass = servletclassElement.getStringValue();
+            // 根据servlet-name的值找到url-pattern
+            Element servletMapping = (Element) rootElement.selectSingleNode("/web-app/servlet-mapping[servlet-name='" + servletName + "']");
+            // /lagou
+            String urlPattern = servletMapping.selectSingleNode("url-pattern").getStringValue();
+
+            myWrapper.setUrlPath(urlPattern);
+            myWrapper.setClsName(servletClass);
+        }
+        File[] files = file.listFiles();
+        MyClassLoader myClassLoader = new MyClassLoader();
+        for(File f : files){
+            if(f.isDirectory()){
+                String path = f.getAbsolutePath();
+                Class<?> aClass = myClassLoader.findClass(path+"\\"+servletClass.replace(".","\\")+".class",servletClass);
+                try {
+                    HttpServlet obj = (HttpServlet)aClass.newInstance();
+                    myWrapper.setServlet(obj);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                /*System.out.println("-------"+path);
+                URL newurl=new URL(path);
+                URLClassLoader classLoader=new URLClassLoader(new URL[]{newurl});
+                Class<?> methtClass = classLoader.loadClass(servletClass);
+                HttpServlet obj = (HttpServlet)methtClass.newInstance();
+                myWrapper.setServlet(obj);*/
+            }
+        }
+        return myWrapper;
+    }
 
     /**
      * MiniCat程序启动入口
