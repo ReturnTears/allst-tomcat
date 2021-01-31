@@ -199,6 +199,8 @@ public class Bootstrap {
         }
     }
 
+
+
     /**
      * MiniCat程序启动入口
      */
