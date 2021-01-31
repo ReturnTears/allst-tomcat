@@ -2,7 +2,7 @@
 <web-app>
     <servlet>
         <servlet-name>lag</servlet-name>
-        <servlet-class>com.lag.edu.server.LagServlet</servlet-class>
+        <servlet-class>com.lag.edu.server.LagouServlet</servlet-class>
     </servlet>
     <servlet-mapping>
         <servlet-name>lag</servlet-name>
